@@ -2337,23 +2337,37 @@
                             ${moreText}
                         </div>
                         <div class="bulk-edit-controls">
-                            <input type="text" id="bulkDriverInput" class="bulk-edit-input" 
-                                   placeholder="Driver:Group (e.g., John:1)"
-                                   title="Format: DriverName:Group"
-                                   autocomplete="off" />
-                            <button class="btn btn-primary" onclick="bulkUpdateSelected()" 
-                                    id="bulkUpdateBtn">💾 Update All</button>
-                            <button class="btn btn-secondary" onclick="clearSelection()">✖️ Cancel</button>
+                            <div style="display: flex; gap: 8px; width: 100%; margin-bottom: 8px;">
+                                <div style="flex: 2;">
+                                    <input type="text" id="bulkDriverInput" class="bulk-edit-input" 
+                                           placeholder="Driver name (e.g., John)"
+                                           title="Driver name for all selected markers"
+                                           autocomplete="off" 
+                                           style="margin: 0;" />
+                                </div>
+                                <div style="flex: 1;">
+                                    <input type="text" id="bulkGroupInput" class="bulk-edit-input" 
+                                           placeholder="Group (e.g., 1)"
+                                           title="Group for all selected markers"
+                                           autocomplete="off" 
+                                           style="margin: 0;" />
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-primary" onclick="bulkUpdateSelected()" 
+                                        id="bulkUpdateBtn" style="flex: 1;">💾 Update All</button>
+                                <button class="btn btn-secondary" onclick="clearSelection()" style="flex: 1;">✖️ Cancel</button>
+                            </div>
                         </div>
                         <div style="font-size: 10px; color: #999; margin-top: 5px;">
-                            Format: Driver:Group (e.g., John:1, Mary:2DD2)
+                            Enter driver name and group separately. Both will be combined as "Driver:Group"
                         </div>
                     </div>
                 `;
                 
                 setTimeout(() => {
-                    const input = document.getElementById('bulkDriverInput');
-                    if (input) input.focus();
+                    const driverInput = document.getElementById('bulkDriverInput');
+                    if (driverInput) driverInput.focus();
                 }, 100);
                 
             } catch (error) {
@@ -2490,21 +2504,40 @@
                     </div>`;
                 }
                 
+                // Convert group back to display format (show original group string if available)
+                let groupDisplayValue = '';
+                if (currentGroup !== null) {
+                    // Try to extract the original group portion from the combined field
+                    if (currentCombined.includes(':')) {
+                        groupDisplayValue = currentCombined.split(':')[1] || '';
+                    } else {
+                        groupDisplayValue = currentGroup.toString();
+                    }
+                }
+                
                 const detailsHtml = `
                     ${infoHtml}
                     
                     <div style="border-top: 1px solid #dee2e6; padding-top: 8px; margin-top: 8px;">
-                        <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">Driver:Group Assignment:</label>
-                        <div style="margin-bottom: 8px;">
-                            <input type="text" id="editCombined" value="${escapeHtml(currentCombined)}" 
-                                   placeholder="Driver:Group (e.g., John:1, Mary:2DD2)"
-                                   title="Format: DriverName:Group. Supports business codes: DD, SS, AA, F"
-                                   style="width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;"
-                                   autocomplete="off">
+                        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                            <div style="flex: 2;">
+                                <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">Driver Name:</label>
+                                <input type="text" id="editDriver" value="${escapeHtml(currentDriver || '')}" 
+                                       placeholder="Driver name (e.g., John)"
+                                       style="width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;"
+                                       autocomplete="off">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">Group:</label>
+                                <input type="text" id="editGroup" value="${escapeHtml(groupDisplayValue)}" 
+                                       placeholder="Group (e.g., 1, 2DD2)"
+                                       style="width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;"
+                                       autocomplete="off">
+                            </div>
                         </div>
                         
                         <div style="font-size: 10px; color: #999; margin-bottom: 8px;">
-                            Format: DriverName:Group (e.g., John:1, Mary:2DD2, Bob:1&2)
+                            Group examples: 1, 2, 3, 1DD1, 2F2, 1&2, 123
                         </div>
                         
                         <div style="display: flex; gap: 4px;">
@@ -2523,19 +2556,28 @@
                 detailsContent.innerHTML = detailsHtml;
                 
                 setTimeout(() => {
-                    const combinedInput = document.getElementById('editCombined');
+                    const driverInput = document.getElementById('editDriver');
+                    const groupInput = document.getElementById('editGroup');
                     
-                    if (combinedInput) {
-                        combinedInput.focus();
-                        combinedInput.select();
+                    if (driverInput) {
+                        driverInput.focus();
+                        driverInput.select();
                         
-                        combinedInput.addEventListener('keydown', function(e) {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                saveMarkerData();
-                            } else if (e.key === 'Escape') {
-                                e.preventDefault();
-                                cancelEdit();
+                        // Add keyboard handlers to both fields
+                        [driverInput, groupInput].forEach(input => {
+                            if (input) {
+                                input.addEventListener('keydown', function(e) {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        saveMarkerData();
+                                    } else if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        cancelEdit();
+                                    } else if (e.key === 'Tab' && input === driverInput) {
+                                        // Tab from driver to group field
+                                        setTimeout(() => groupInput?.focus(), 0);
+                                    }
+                                });
                             }
                         });
                     }
@@ -2715,15 +2757,28 @@
 
         // ==================== SAVE FUNCTIONS ====================
         async function saveMarkerData() {
-            const editCombinedInput = document.getElementById('editCombined');
+            const editDriverInput = document.getElementById('editDriver');
+            const editGroupInput = document.getElementById('editGroup');
             const saveBtn = document.getElementById('saveBtn');
             
-            if (!editCombinedInput) {
-                showNotification('Error: Edit field not found', 'error');
+            if (!editDriverInput || !editGroupInput) {
+                showNotification('Error: Edit fields not found', 'error');
                 return;
             }
             
-            const newCombinedValue = editCombinedInput.value.trim();
+            const driverValue = editDriverInput.value.trim();
+            const groupValue = editGroupInput.value.trim();
+            
+            // Combine driver and group back into the expected format
+            let newCombinedValue = '';
+            if (driverValue && groupValue) {
+                newCombinedValue = `${driverValue}:${groupValue}`;
+            } else if (driverValue) {
+                newCombinedValue = driverValue; // Just driver, no group
+            } else if (groupValue) {
+                newCombinedValue = `:${groupValue}`; // Just group, no driver (unusual but possible)
+            }
+            // If both are empty, newCombinedValue stays empty
             
             if (!state.selectedRow || !state.activeColumn) {
                 showNotification('Error: No row or column selected', 'error');
@@ -2744,13 +2799,15 @@
                     throw new Error('Could not determine row index');
                 }
                 
-                console.log('Saving to sheet row:', sheetRowIndex, 'column:', state.activeColumn, 'for dog:', state.selectedRow['Dog Name']);
+                console.log('Saving to sheet row:', sheetRowIndex, 'column:', state.activeColumn, 
+                           'driver:', driverValue, 'group:', groupValue, 'combined:', newCombinedValue);
                 
                 state.selectedRow[state.activeColumn] = newCombinedValue;
                 
                 const dogId = getDogId(state.selectedRow);
                 const markerData = state.markerLookup.get(dogId);
                 if (markerData) {
+                    // Parse the new combined value to get the processed group
                     const { driver, group } = parseCombined(newCombinedValue);
                     markerData.group = group;
                     
@@ -2815,24 +2872,31 @@
                 return;
             }
             
-            const bulkInput = document.getElementById('bulkDriverInput');
+            const bulkDriverInput = document.getElementById('bulkDriverInput');
+            const bulkGroupInput = document.getElementById('bulkGroupInput');
             const bulkBtn = document.getElementById('bulkUpdateBtn');
             
-            if (!bulkInput || !state.activeColumn) {
+            if (!bulkDriverInput || !bulkGroupInput || !state.activeColumn) {
                 showNotification('Interface not ready. Please try again.', 'error');
                 return;
             }
             
-            const newValue = bulkInput.value.trim();
-            if (!newValue) {
-                showNotification('Please enter a Driver:Group value', 'error');
-                bulkInput.focus();
-                return;
+            const driverValue = bulkDriverInput.value.trim();
+            const groupValue = bulkGroupInput.value.trim();
+            
+            // Combine the values
+            let newCombinedValue = '';
+            if (driverValue && groupValue) {
+                newCombinedValue = `${driverValue}:${groupValue}`;
+            } else if (driverValue) {
+                newCombinedValue = driverValue;
+            } else if (groupValue) {
+                newCombinedValue = `:${groupValue}`;
             }
             
-            if (!newValue.includes(':')) {
-                showNotification('Please use format: Driver:Group (e.g., John:1)', 'error');
-                bulkInput.focus();
+            if (!newCombinedValue) {
+                showNotification('Please enter at least a driver name or group', 'error');
+                bulkDriverInput.focus();
                 return;
             }
             
@@ -2861,7 +2925,7 @@
                     return;
                 }
                 
-                if (!confirm(`Update ${validSelectedRows.length} dogs with: "${newValue}"?`)) {
+                if (!confirm(`Update ${validSelectedRows.length} dogs with: "${newCombinedValue}"?`)) {
                     return;
                 }
                 
@@ -2876,7 +2940,7 @@
                 }));
                 
                 validSelectedRows.forEach(row => {
-                    row[state.activeColumn] = newValue;
+                    row[state.activeColumn] = newCombinedValue;
                 });
                 
                 assignDriverColors();
@@ -2887,14 +2951,14 @@
                 
                 const updates = sheetRowIndices.map(sheetRowIndex => {
                     const updateData = {};
-                    updateData[state.activeColumn] = newValue;
+                    updateData[state.activeColumn] = newCombinedValue;
                     return {
                         rowIndex: sheetRowIndex,
                         updatedData: updateData
                     };
                 });
                 
-                console.log('Bulk updating rows:', sheetRowIndices, 'in column:', state.activeColumn);
+                console.log('Bulk updating rows:', sheetRowIndices, 'with combined value:', newCombinedValue);
                 
                 const payload = {
                     action: 'bulkUpdate',
@@ -3066,6 +3130,7 @@
         console.log('The map automatically finds today\'s date column or uses "Combined" as fallback');
         console.log('Hidden: blank entries, "Cancel", "LMCancel", "LM Cancel", "Cancelled", "LM Cancelled"');
         console.log('NEW: Loads field locations from "Fields" tab and displays them as black diamonds');
+        console.log('NEW: Split edit fields - separate Driver Name and Group inputs');
     </script>
 </body>
 </html>
