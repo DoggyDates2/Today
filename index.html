@@ -3118,7 +3118,7 @@
             
             // If error is related to group parsing, provide helpful info
             if (event.error?.message?.includes('group') || event.error?.message?.includes('Group')) {
-                console.log('Group parsing tip: Supported business codes are DD, SUB, AA, F');
+                console.log('Group parsing tip: Supported business codes are DD, SUB, Trial, XX, AA, F');
                 console.log('Valid patterns: 1, 2, 3, 1DD1, 2F2, 1&2, 1DD&2, 123, 1SUB23, etc.');
             }
         });
