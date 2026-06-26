@@ -1213,7 +1213,7 @@
             });
         }
         
-        function createMarkerIcon(color, isSelected = false, markerType = 'circle', group = null, isInSelection = false, dogName = null, hasCallout = false) {
+        function createMarkerIcon(color, isSelected = false, markerType = 'circle', group = null, isInSelection = false, dogName = null, hasCallout = false, hasGrooming = false) {
             // Special handling for Park (white diamond) - keep this for backward compatibility
             if (dogName && dogName.toLowerCase() === 'park') {
                 const strokeColor = isInSelection ? '#007bff' : (isSelected ? '#007bff' : '#666666');
@@ -1237,6 +1237,11 @@
             const strokeWidth = isSelected ? 3 : (isInSelection ? 3 : 2);
             const size = isInSelection ? 16 : 13;
             
+            // Red grooming line overlay - drawn on top of each marker shape
+            const groomingLine = hasGrooming
+                ? `<div style="position:absolute; top:50%; left:-2px; right:-2px; height:1.5px; background:#ff0000; transform:translateY(-50%) rotate(-20deg); pointer-events:none; z-index:1000;"></div>`
+                : '';
+            
             let icon;
             
             try {
@@ -1244,10 +1249,13 @@
                     // Triangle for Group 2
                     const svgSize = size + 3;
                     icon = L.divIcon({
-                        html: `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3)); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">
-                            <path d="M${svgSize/2} 2 L${svgSize-2} ${svgSize-2} L2 ${svgSize-2} Z" 
-                                  fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
-                        </svg>`,
+                        html: `<div style="position:relative; width:${svgSize}px; height:${svgSize}px;">
+                            <svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3)); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">
+                                <path d="M${svgSize/2} 2 L${svgSize-2} ${svgSize-2} L2 ${svgSize-2} Z" 
+                                      fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
+                            </svg>
+                            ${groomingLine}
+                        </div>`,
                         className: `custom-triangle-marker ${isInSelection ? 'marker-selected' : ''}`,
                         iconSize: [svgSize, svgSize],
                         iconAnchor: [svgSize/2, svgSize/2]
@@ -1255,7 +1263,10 @@
                 } else if (group === 3) {
                     // Square for Group 3
                     icon = L.divIcon({
-                        html: `<div style="width: ${size}px; height: ${size}px; background-color: ${color}; border: ${strokeWidth}px solid ${strokeColor}; box-shadow: 0 2px 4px rgba(0,0,0,0.3); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}"></div>`,
+                        html: `<div style="position:relative; width:${size}px; height:${size}px;">
+                            <div style="width: ${size}px; height: ${size}px; background-color: ${color}; border: ${strokeWidth}px solid ${strokeColor}; box-shadow: 0 2px 4px rgba(0,0,0,0.3); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}"></div>
+                            ${groomingLine}
+                        </div>`,
                         className: `custom-square-marker ${isInSelection ? 'marker-selected' : ''}`,
                         iconSize: [size, size],
                         iconAnchor: [size/2, size/2]
@@ -1264,10 +1275,13 @@
                     // Star for Group 1&2
                     const svgSize = size + 4;
                     icon = L.divIcon({
-                        html: `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3)); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">
-                            <polygon points="${svgSize/2},2 ${svgSize*0.6},${svgSize*0.4} ${svgSize-2},${svgSize*0.4} ${svgSize*0.7},${svgSize*0.6} ${svgSize*0.8},${svgSize-2} ${svgSize/2},${svgSize*0.75} ${svgSize*0.2},${svgSize-2} ${svgSize*0.3},${svgSize*0.6} 2,${svgSize*0.4} ${svgSize*0.4},${svgSize*0.4}" 
-                                     fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
-                        </svg>`,
+                        html: `<div style="position:relative; width:${svgSize}px; height:${svgSize}px;">
+                            <svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3)); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">
+                                <polygon points="${svgSize/2},2 ${svgSize*0.6},${svgSize*0.4} ${svgSize-2},${svgSize*0.4} ${svgSize*0.7},${svgSize*0.6} ${svgSize*0.8},${svgSize-2} ${svgSize/2},${svgSize*0.75} ${svgSize*0.2},${svgSize-2} ${svgSize*0.3},${svgSize*0.6} 2,${svgSize*0.4} ${svgSize*0.4},${svgSize*0.4}" 
+                                         fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
+                            </svg>
+                            ${groomingLine}
+                        </div>`,
                         className: `custom-star-marker ${isInSelection ? 'marker-selected' : ''}`,
                         iconSize: [svgSize, svgSize],
                         iconAnchor: [svgSize/2, svgSize/2]
@@ -1276,10 +1290,13 @@
                     // Trapezoid for Group 2&3
                     const svgSize = size + 4;
                     icon = L.divIcon({
-                        html: `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3)); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">
-                            <path d="M3 2 L${svgSize-3} 2 L${svgSize-5} ${svgSize-2} L5 ${svgSize-2} Z" 
-                                  fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
-                        </svg>`,
+                        html: `<div style="position:relative; width:${svgSize}px; height:${svgSize}px;">
+                            <svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3)); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">
+                                <path d="M3 2 L${svgSize-3} 2 L${svgSize-5} ${svgSize-2} L5 ${svgSize-2} Z" 
+                                      fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
+                            </svg>
+                            ${groomingLine}
+                        </div>`,
                         className: `custom-trapezoid-marker ${isInSelection ? 'marker-selected' : ''}`,
                         iconSize: [svgSize, svgSize],
                         iconAnchor: [svgSize/2, svgSize/2]
@@ -1291,10 +1308,13 @@
                     const cy = svgSize/2;
                     const r = (svgSize-4)/2;
                     icon = L.divIcon({
-                        html: `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3)); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">
-                            <polygon points="${cx+r},${cy} ${cx+r/2},${cy-r*0.866} ${cx-r/2},${cy-r*0.866} ${cx-r},${cy} ${cx-r/2},${cy+r*0.866} ${cx+r/2},${cy+r*0.866}" 
-                                     fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
-                        </svg>`,
+                        html: `<div style="position:relative; width:${svgSize}px; height:${svgSize}px;">
+                            <svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3)); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">
+                                <polygon points="${cx+r},${cy} ${cx+r/2},${cy-r*0.866} ${cx-r/2},${cy-r*0.866} ${cx-r},${cy} ${cx-r/2},${cy+r*0.866} ${cx+r/2},${cy+r*0.866}" 
+                                         fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
+                            </svg>
+                            ${groomingLine}
+                        </div>`,
                         className: `custom-hexagon-marker ${isInSelection ? 'marker-selected' : ''}`,
                         iconSize: [svgSize, svgSize],
                         iconAnchor: [svgSize/2, svgSize/2]
@@ -1302,7 +1322,10 @@
                 } else {
                     // Circle for Group 1 (default)
                     icon = L.divIcon({
-                        html: `<div style="width: ${size}px; height: ${size}px; background-color: ${color}; border: ${strokeWidth}px solid ${strokeColor}; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}"></div>`,
+                        html: `<div style="position:relative; width:${size}px; height:${size}px;">
+                            <div style="width: ${size}px; height: ${size}px; background-color: ${color}; border: ${strokeWidth}px solid ${strokeColor}; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}"></div>
+                            ${groomingLine}
+                        </div>`,
                         className: `custom-marker ${isInSelection ? 'marker-selected' : ''}`,
                         iconSize: [size, size],
                         iconAnchor: [size/2, size/2]
@@ -1902,6 +1925,7 @@
                         const dogId = getDogId(row);
                         const isInSelection = dogId && state.selectedMarkers.has(dogId);
                         const hasCallout = row['Callout'] && row['Callout'].trim();
+                        const hasGrooming = row['Grooming'] && row['Grooming'].trim().toUpperCase() === 'TODAY';
                         
                         // Calculate group counts for this driver
                         let driverGroupCounts = { 1: 0, 2: 0, 3: 0 };
@@ -1964,7 +1988,7 @@
                         tooltipHtml += `</div>`;
                         
                         const marker = L.marker([offsetLat, offsetLng], {
-                            icon: createMarkerIcon(color, false, 'group', group, isInSelection, row['Dog Name'], hasCallout),
+                            icon: createMarkerIcon(color, false, 'group', group, isInSelection, row['Dog Name'], hasCallout, hasGrooming),
                             riseOnHover: true
                         });
 
@@ -2283,7 +2307,7 @@
                         color = '#000000';
                     }
                     
-                    const newIcon = createMarkerIcon(color, isSelected, 'group', group, isInSelection, markerData.row['Dog Name'], markerData.row['Callout'] && markerData.row['Callout'].trim());
+                    const newIcon = createMarkerIcon(color, isSelected, 'group', group, isInSelection, markerData.row['Dog Name'], markerData.row['Callout'] && markerData.row['Callout'].trim(), markerData.row['Grooming'] && markerData.row['Grooming'].trim().toUpperCase() === 'TODAY');
                     markerData.marker.setIcon(newIcon);
                 } catch (error) {
                     console.error('Error updating marker display:', error);
@@ -2415,7 +2439,7 @@
                             
                             const dogId = getDogId(prevData.row);
                             const isInSelection = dogId && state.selectedMarkers.has(dogId);
-                            state.selectedMarker.setIcon(createMarkerIcon(color, false, 'group', prevGroup, isInSelection, prevData.row['Dog Name'], prevData.row['Callout'] && prevData.row['Callout'].trim()));
+                            state.selectedMarker.setIcon(createMarkerIcon(color, false, 'group', prevGroup, isInSelection, prevData.row['Dog Name'], prevData.row['Callout'] && prevData.row['Callout'].trim(), prevData.row['Grooming'] && prevData.row['Grooming'].trim().toUpperCase() === 'TODAY'));
                         } catch (clearError) {
                             console.warn('Error clearing previous marker:', clearError);
                         }
@@ -2439,7 +2463,7 @@
                     
                     const dogId = getDogId(row);
                     const isInSelection = dogId && state.selectedMarkers.has(dogId);
-                    marker.setIcon(createMarkerIcon(color, true, 'group', group, isInSelection, row['Dog Name'], row['Callout'] && row['Callout'].trim()));
+                    marker.setIcon(createMarkerIcon(color, true, 'group', group, isInSelection, row['Dog Name'], row['Callout'] && row['Callout'].trim(), row['Grooming'] && row['Grooming'].trim().toUpperCase() === 'TODAY'));
                 } catch (iconError) {
                     console.warn('Error updating marker icon:', iconError);
                 }
@@ -2819,8 +2843,9 @@
                     
                     const isInSelection = dogId && state.selectedMarkers.has(dogId);
                     const hasCallout = state.selectedRow['Callout'] && state.selectedRow['Callout'].trim();
+                    const hasGrooming = state.selectedRow['Grooming'] && state.selectedRow['Grooming'].trim().toUpperCase() === 'TODAY';
                     
-                    const newIcon = createMarkerIcon(color, true, 'group', markerData.group, isInSelection, state.selectedRow['Dog Name'], hasCallout);
+                    const newIcon = createMarkerIcon(color, true, 'group', markerData.group, isInSelection, state.selectedRow['Dog Name'], hasCallout, hasGrooming);
                     markerData.marker.setIcon(newIcon);
                 }
                 
