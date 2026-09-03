@@ -723,6 +723,8 @@
             STAFF_WORKSHEET_NAME: 'Staff', // Driver -> Field ID / Parking ID, plus the ID -> lat/lng block from col J over
             API_KEY: 'AIzaSyAGLteYp1k98SZo0FMClRgBX0LBsgpMxqI',
             APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyAIZavcGcPhKH8WC6Ynop5NESF5sE2eyePubRoqebSbj3sbPxr4BMp-eYD81-th7cstQ/exec',
+            TILE_PROVIDER: 'carto', // 'carto' (free key), 'stadia' (paid, Stamen Toner), or 'osm' (no key)
+            TILE_API_KEY: 'cb1_2vkr_1_cb64ab641c4e0cec7ba0723c', // <-- paste key here
             DEFAULT_LAT: 42.2968,
             DEFAULT_LNG: -71.2636,
             DEFAULT_ZOOM: 11,
@@ -1444,13 +1446,31 @@
                     attributionControl: true
                 });
                 
-                const tileUrl = 'https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png';
+                // Basemap: CARTO Positron (free key, 5M tiles/mo) or Stadia's
+                // Stamen Toner Lite (paid). Either way OSM is the keyless fallback.
+                const tileKey = (CONFIG.TILE_API_KEY || '').trim();
+                const provider = tileKey ? CONFIG.TILE_PROVIDER : 'osm';
+
+                let tileUrl, tileAttribution, tileMaxZoom;
+                if (provider === 'carto') {
+                    tileUrl = `https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png?key=${tileKey}`;
+                    tileAttribution = '&copy; OpenStreetMap contributors &copy; CARTO';
+                    tileMaxZoom = 20;
+                } else if (provider === 'stadia') {
+                    tileUrl = `https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}{r}.png?api_key=${tileKey}`;
+                    tileAttribution = '&copy; Stadia Maps &copy; Stamen Design &copy; OpenStreetMap contributors';
+                    tileMaxZoom = 20;
+                } else {
+                    tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+                    tileAttribution = '&copy; OpenStreetMap contributors';
+                    tileMaxZoom = 19;
+                }
                 
-                console.log('Loading map tiles: Stamen Toner (High contrast for clear streets)');
+                console.log(`Loading map tiles: ${provider}`);
                 
                 const tileLayer = L.tileLayer(tileUrl, {
-                    attribution: 'Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.',
-                    maxZoom: 19,
+                    attribution: tileAttribution,
+                    maxZoom: tileMaxZoom,
                     minZoom: 2,
                     errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
                 });
@@ -1464,9 +1484,9 @@
                         console.warn('No tiles loaded - switching to fallback');
                         showNotification('Stamen server not responding, trying fallback...', 'info');
                         
-                        fallbackLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
-                            attribution: '© OpenStreetMap contributors © CARTO',
-                            maxZoom: 19
+                        fallbackLayer = L.tileLayer('https://tile.openstreetmap.de/{z}/{x}/{y}.png', {
+                            attribution: '&copy; OpenStreetMap contributors',
+                            maxZoom: 18
                         });
                         state.map.removeLayer(tileLayer);
                         fallbackLayer.addTo(state.map);
@@ -1482,9 +1502,9 @@
                     
                     if (!fallbackLayer) {
                         console.log('Switching to fallback map provider (CartoDB Positron)...');
-                        fallbackLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
-                            attribution: '© OpenStreetMap contributors © CARTO',
-                            maxZoom: 19
+                        fallbackLayer = L.tileLayer('https://tile.openstreetmap.de/{z}/{x}/{y}.png', {
+                            attribution: '&copy; OpenStreetMap contributors',
+                            maxZoom: 18
                         });
                         state.map.removeLayer(tileLayer);
                         fallbackLayer.addTo(state.map);
@@ -1501,9 +1521,6 @@
                 
                 tileLayer.addTo(state.map);
 
-                // Staff clusters are laid out in screen pixels, so they need to be
-                // re-projected whenever the zoom level changes.
-                state.map.on('zoomend', repositionStaffMarkers);
                 
                 setTimeout(() => {
                     const tiles = document.querySelectorAll('.leaflet-tile');
@@ -1957,25 +1974,24 @@
             }
         }
 
-        // One pin per driver per kind, colored by driver. `dim` is used for the
-        // pin that isn't the one being described (kept for future use).
-        function createStaffIcon(kind, color) {
-            const size = 26;
-            const fill = color || '#444444';
-            const letter = kind === 'parking' ? 'P' : 'F';
+        // Deliberately muted: fields are the same black diamonds as before, and
+        // parking is a matching dark square. One marker per location, not per
+        // driver -- the per-driver detail lives in the tooltip instead.
+        function createStaffIcon(kind) {
+            const size = 24;
+            const stroke = '#666666';
+
             const shape = kind === 'parking'
-                ? `<rect x="3" y="3" width="${size - 6}" height="${size - 6}" rx="6" ry="6"
-                         fill="${fill}" stroke="#ffffff" stroke-width="2.5"/>`
-                : `<polygon points="${size / 2},2 ${size - 2},${size * 0.4} ${size * 0.8},${size - 2} ${size * 0.2},${size - 2} 2,${size * 0.4}"
-                            fill="${fill}" stroke="#ffffff" stroke-width="2.5"/>`;
+                ? `<rect x="3" y="3" width="${size - 6}" height="${size - 6}" rx="4" ry="4"
+                         fill="#000000" stroke="${stroke}" stroke-width="2"/>
+                   <text x="${size / 2}" y="${size / 2 + 4}" text-anchor="middle" font-size="11"
+                         font-family="sans-serif" font-weight="700" fill="#ffffff">P</text>`
+                : `<path d="M${size / 2} 2 L${size - 2} ${size / 2} L${size / 2} ${size - 2} L2 ${size / 2} Z"
+                          fill="#000000" stroke="${stroke}" stroke-width="2"/>`;
 
             return L.divIcon({
                 html: `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"
-                            style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">
-                        ${shape}
-                        <text x="${size / 2}" y="${size / 2 + 4.5}" text-anchor="middle" font-size="12"
-                              font-family="sans-serif" font-weight="700" fill="#ffffff">${letter}</text>
-                    </svg>`,
+                            style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));">${shape}</svg>`,
                 className: `custom-staff-marker staff-${kind}`,
                 iconSize: [size, size],
                 iconAnchor: [size / 2, size / 2]
@@ -1991,40 +2007,6 @@
             state.staffMarkers = [];
         }
 
-        // Fans N pins out around their shared point in a ring. Offsets are computed
-        // in screen pixels and converted back to lat/lng, so the cluster keeps the
-        // same visual spread at every zoom level instead of collapsing when you
-        // zoom out or flying apart when you zoom in.
-        function staffPinLatLng(centerLat, centerLng, kind, index, count) {
-            const zoom = state.map.getZoom();
-            const center = state.map.project([centerLat, centerLng], zoom);
-
-            // Push parking below the anchor and fields above it, so a driver who
-            // parks at their own field still gets two separate, clickable pins.
-            const kindShift = kind === 'parking' ? 16 : -16;
-
-            let dx = 0;
-            let dy = kindShift;
-
-            if (count > 1) {
-                const radius = 16 + count * 2.2;
-                // Start at the top of the ring so small clusters look deliberate.
-                const angle = (index / count) * Math.PI * 2 - Math.PI / 2;
-                dx = Math.cos(angle) * radius;
-                dy = kindShift + Math.sin(angle) * radius;
-            }
-
-            return state.map.unproject(L.point(center.x + dx, center.y + dy), zoom);
-        }
-
-        function repositionStaffMarkers() {
-            state.staffMarkers.forEach(marker => {
-                const p = marker._staffPlacement;
-                if (!p) return;
-                marker.setLatLng(staffPinLatLng(p.lat, p.lng, p.kind, p.index, p.count));
-            });
-        }
-
         // Short name for a location ID, falling back to its address then the ID.
         function locationLabel(id, fallbackAddress) {
             const loc = state.locationsMap.get(id);
@@ -2033,8 +2015,7 @@
             return name || address || id || '';
         }
 
-        // Small "F: Sherborn  P: Elbery" line appended to each dog's tooltip so you
-        // can see where that dog's driver starts and ends without leaving the pin.
+        // Small "F: Sherborn  P: Elbery" line appended to each dog's tooltip.
         function buildStaffSuffix(driverName) {
             try {
                 if (!driverName) return '';
@@ -2056,59 +2037,60 @@
             }
         }
 
-        // Patches the F:/P: line into tooltips of markers that are already on the
-        // map. Deliberately does NOT redraw anything: no marker is recreated, so
-        // selection, open edit panels and lasso state all survive.
+        // Patches the F:/P: line into tooltips of markers already on the map,
+        // without recreating them, so selection and edit state survive.
         function refreshDogTooltipsWithStaff() {
             state.markers.forEach(m => {
                 try {
                     if (!m || !m.marker || !m.marker._baseTooltipHtml) return;
-                    const html = m.marker._baseTooltipHtml
-                        + buildStaffSuffix(m.marker._tooltipDriver) + '</div>';
-                    m.marker.setTooltipContent(html);
+                    m.marker.setTooltipContent(
+                        m.marker._baseTooltipHtml + buildStaffSuffix(m.marker._tooltipDriver) + '</div>'
+                    );
                 } catch (error) {
                     /* a tooltip is cosmetic; never let it bubble */
                 }
             });
         }
 
-        function buildStaffTooltip(entry, kind) {
-            const color = getDriverColor(entry.driver);
+        // Tooltip for a location: what it is, then every driver using it today
+        // with their colour swatch and start time.
+        function buildStaffTooltip(spot) {
+            const label = spot.kind === 'parking' ? 'Parking (start &amp; end)' : 'Field';
+            const title = locationLabel(spot.id, '') || spot.id;
 
-            const parking = locationLabel(entry.parkingId, entry.parkingAddress) || '—';
-            const field = locationLabel(entry.fieldId, entry.fieldAddress) || '—';
+            const rows = spot.drivers
+                .slice()
+                .sort((a, b) => a.driver.localeCompare(b.driver))
+                .map(d => {
+                    const swatch = getDriverColor(d.driver);
+                    const other = spot.kind === 'parking'
+                        ? locationLabel(d.fieldId, d.fieldAddress)
+                        : locationLabel(d.parkingId, d.parkingAddress);
+                    const otherLabel = spot.kind === 'parking' ? 'F' : 'P';
+                    return `<div style="display:flex;align-items:center;gap:5px;margin-top:2px;">
+                                <span style="width:9px;height:9px;border-radius:50%;background:${swatch};
+                                             border:1px solid #fff;display:inline-block;flex:0 0 auto;"></span>
+                                <span>${escapeHtml(d.driver)}
+                                    ${d.startTime ? `<span style="opacity:.6;font-size:10px;">${escapeHtml(d.startTime)}</span>` : ''}
+                                    ${other ? `<span style="opacity:.6;font-size:10px;">&middot; ${otherLabel}: ${escapeHtml(other)}</span>` : ''}
+                                </span>
+                            </div>`;
+                }).join('');
 
-            const line = (label, text, isThisPin) => `
-                <div style="margin-top:3px; ${isThisPin ? 'font-weight:600;' : 'opacity:.75;'}">
-                    <span style="opacity:.8;font-weight:400;">${label}:</span> ${escapeHtml(text)}
-                </div>`;
-
-            return `
-                <div style="min-width:170px;">
-                    <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:13px;">
-                        <span style="width:10px;height:10px;border-radius:50%;background:${color};
-                                     border:1px solid #fff;display:inline-block;flex:0 0 auto;"></span>
-                        ${escapeHtml(entry.driver)}
-                        ${entry.startTime ? `<span style="font-weight:400;opacity:.7;font-size:11px;">${escapeHtml(entry.startTime)}</span>` : ''}
-                    </div>
-                    ${line('Parking', parking, kind === 'parking')}
-                    ${line('Field', field, kind === 'field')}
-                    ${entry.notes ? `<div style="margin-top:4px;font-size:11px;color:#ffd77a;">${escapeHtml(entry.notes)}</div>` : ''}
-                </div>`;
+            return `<div style="min-width:150px;">
+                        <div style="font-weight:700;">${escapeHtml(title)}</div>
+                        <div style="font-size:10px;opacity:.7;margin-bottom:4px;">${label} &middot; ${spot.drivers.length} driver${spot.drivers.length === 1 ? '' : 's'}</div>
+                        ${rows}
+                    </div>`;
         }
 
         function addStaffMarkers(force) {
-            // The Staff tab is fixed for the day, so these pins only change when the
-            // driver filter, the visibility toggle, or a driver colour changes.
-            // updateMap() runs on every dog edit and every search keystroke, and
-            // tearing down ~78 Leaflet markers each time is pure waste.
             const filter = state.currentFilter;
             const renderKey = [
                 filter || '',
                 state.showStaff ? '1' : '0',
                 state.staffData.length,
-                state.locationsMap.size,
-                state.staffData.map(s => getDriverColor(s.driver)).join(',')
+                state.locationsMap.size
             ].join('|');
 
             if (!force && renderKey === state.staffRenderKey && state.staffMarkers.length > 0) {
@@ -2122,15 +2104,13 @@
             if (!state.staffData || state.staffData.length === 0) return;
             if (state.locationsMap.size === 0) return;
 
-            // Respect the driver filter from the legend.
             const visible = filter
                 ? state.staffData.filter(s => s.driver === filter)
                 : state.staffData;
-
             if (visible.length === 0) return;
 
-            // Group drivers by location so we know how wide to fan each cluster.
-            const spots = new Map(); // key = kind + '|' + id
+            // One marker per distinct location, with everyone using it attached.
+            const spots = new Map();
             visible.forEach(entry => {
                 [['parking', entry.parkingId], ['field', entry.fieldId]].forEach(([kind, id]) => {
                     if (!id) return;
@@ -2148,43 +2128,29 @@
             });
 
             spots.forEach(spot => {
-                const drivers = spot.drivers.sort((a, b) => a.driver.localeCompare(b.driver));
-                const count = drivers.length;
+                try {
+                    // Tiny nudge so a driver who parks at their own field still
+                    // gets two separate, clickable markers.
+                    const offset = spot.kind === 'field' ? 0.00035 : -0.00035;
 
-                drivers.forEach((entry, index) => {
-                    try {
-                        const marker = L.marker(
-                            staffPinLatLng(spot.lat, spot.lng, spot.kind, index, count),
-                            {
-                                icon: createStaffIcon(spot.kind, getDriverColor(entry.driver)),
-                                riseOnHover: true,
-                                zIndexOffset: 1000
-                            }
-                        );
+                    const marker = L.marker([spot.lat + offset, spot.lng], {
+                        icon: createStaffIcon(spot.kind),
+                        riseOnHover: true
+                    });
 
-                        // Remembered so the ring can be recomputed on zoom.
-                        marker._staffPlacement = {
-                            lat: spot.lat,
-                            lng: spot.lng,
-                            kind: spot.kind,
-                            index: index,
-                            count: count
-                        };
+                    marker.bindTooltip(buildStaffTooltip(spot), {
+                        permanent: false,
+                        direction: 'top',
+                        offset: [0, -12],
+                        className: 'field-marker-tooltip',
+                        opacity: 0.95
+                    });
 
-                        marker.bindTooltip(buildStaffTooltip(entry, spot.kind), {
-                            permanent: false,
-                            direction: 'top',
-                            offset: [0, -14],
-                            className: 'field-marker-tooltip',
-                            opacity: 0.97
-                        });
-
-                        marker.addTo(state.map);
-                        state.staffMarkers.push(marker);
-                    } catch (error) {
-                        console.warn('Error creating staff marker:', error);
-                    }
-                });
+                    marker.addTo(state.map);
+                    state.staffMarkers.push(marker);
+                } catch (error) {
+                    console.warn('Error creating staff marker:', error);
+                }
             });
         }
 
@@ -2207,19 +2173,19 @@
             content.innerHTML = `
                 <div class="legend-item" style="cursor:default;">
                     <span style="display:inline-block;width:13px;height:13px;border-radius:3px;
-                                 background:#333;border:2px solid #fff;box-shadow:0 0 0 1px #999;
+                                 background:#000;border:1px solid #666;
                                  margin-right:6px;"></span>
                     <span><strong>P</strong> — parking (start &amp; end)</span>
                 </div>
                 <div class="legend-item" style="cursor:default;">
                     <span style="display:inline-block;width:0;height:0;margin-right:6px;
                                  border-left:7px solid transparent;border-right:7px solid transparent;
-                                 border-bottom:12px solid #333;"></span>
+                                 border-bottom:12px solid #000;"></span>
                     <span><strong>F</strong> — field</span>
                 </div>
                 <div style="font-size:10px;color:#888;margin-top:4px;">
                     ${state.staffData.length} drivers working today${unmatched.length ? ` &middot; ${unmatched.length} missing coords` : ''}<br/>
-                    One pin per driver; shared spots fan out in a ring.
+                    Hover a marker for the drivers using it.
                 </div>
             `;
         }
