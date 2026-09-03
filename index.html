@@ -724,7 +724,7 @@
             API_KEY: 'AIzaSyAGLteYp1k98SZo0FMClRgBX0LBsgpMxqI',
             APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyAIZavcGcPhKH8WC6Ynop5NESF5sE2eyePubRoqebSbj3sbPxr4BMp-eYD81-th7cstQ/exec',
             TILE_PROVIDER: 'carto', // 'carto' (free key), 'stadia' (paid, Stamen Toner), or 'osm' (no key)
-            TILE_API_KEY: 'cb1_2vkr_1_cb64ab641c4e0cec7ba0723c', // <-- paste key here
+            TILE_API_KEY: 'PASTE_YOUR_CARTO_KEY_HERE', // <-- paste key here
             DEFAULT_LAT: 42.2968,
             DEFAULT_LNG: -71.2636,
             DEFAULT_ZOOM: 11,
@@ -2026,11 +2026,13 @@
                 const parking = locationLabel(entry.parkingId, entry.parkingAddress);
                 if (!field && !parking) return '';
 
-                const parts = [];
-                if (field) parts.push(`F: ${escapeHtml(field)}`);
-                if (parking) parts.push(`P: ${escapeHtml(parking)}`);
+                // Each on its own line with nowrap: "F: Holliston P: Sherborn" was
+                // wrapping mid-pair and reading as one run-on string.
+                const rows = [];
+                if (field) rows.push(`<div style="white-space:nowrap;">F: ${escapeHtml(field)}</div>`);
+                if (parking) rows.push(`<div style="white-space:nowrap;">P: ${escapeHtml(parking)}</div>`);
 
-                return `<div style="margin-top:4px;font-size:10px;opacity:.7;font-weight:400;">${parts.join('&nbsp;&nbsp;')}</div>`;
+                return `<div style="margin-top:5px;font-size:12px;color:#ffffff;font-weight:400;line-height:1.35;">${rows.join('')}</div>`;
             } catch (error) {
                 console.warn('Staff suffix skipped:', error);
                 return '';
@@ -2070,9 +2072,8 @@
                     return `<div style="display:flex;align-items:center;gap:5px;margin-top:2px;">
                                 <span style="width:9px;height:9px;border-radius:50%;background:${swatch};
                                              border:1px solid #fff;display:inline-block;flex:0 0 auto;"></span>
-                                <span>${escapeHtml(d.driver)}
-                                    ${d.startTime ? `<span style="opacity:.6;font-size:10px;">${escapeHtml(d.startTime)}</span>` : ''}
-                                    ${other ? `<span style="opacity:.6;font-size:10px;">&middot; ${otherLabel}: ${escapeHtml(other)}</span>` : ''}
+                                <span style="white-space:nowrap;">${escapeHtml(d.driver)}
+                                    ${other ? `<span style="opacity:.75;font-size:11px;">&middot; ${otherLabel}: ${escapeHtml(other)}</span>` : ''}
                                 </span>
                             </div>`;
                 }).join('');
