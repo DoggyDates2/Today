@@ -2015,6 +2015,30 @@
             return name || address || id || '';
         }
 
+        // "VAN" or "RAV" from the Staff tab's CAR column (column D). Substring
+        // match, case-insensitive, so entries like "\\#VAN CAM^GoldSiennaW75165"
+        // and "RedRav5KCC23" both hit. Anything else returns nothing at all.
+        function buildVehicleTag(driverName, inline) {
+            try {
+                if (!driverName) return '';
+                const entry = state.staffByDriver.get(driverName.trim());
+                if (!entry || !entry.car) return '';
+
+                const car = entry.car.toLowerCase();
+                let tag = '';
+                if (car.includes('van')) tag = 'VAN';
+                else if (car.includes('rav')) tag = 'RAV';
+                if (!tag) return '';
+
+                return inline
+                    ? `<span style="font-size:12px;color:#ffffff;font-weight:600;letter-spacing:.5px;">&nbsp;&nbsp;${tag}</span>`
+                    : `<br/><span style="font-size:12px;color:#ffffff;font-weight:600;letter-spacing:.5px;">${tag}</span>`;
+            } catch (error) {
+                console.warn('Vehicle tag skipped:', error);
+                return '';
+            }
+        }
+
         // Small "F: Sherborn  P: Elbery" line appended to each dog's tooltip.
         function buildStaffSuffix(driverName) {
             try {
@@ -2046,7 +2070,10 @@
                 try {
                     if (!m || !m.marker || !m.marker._baseTooltipHtml) return;
                     m.marker.setTooltipContent(
-                        m.marker._baseTooltipHtml + buildStaffSuffix(m.marker._tooltipDriver) + '</div>'
+                        m.marker._baseTooltipHtml
+                            .replace('<!--VEHICLE_INLINE-->', buildVehicleTag(m.marker._tooltipDriver, true))
+                            .replace('<!--VEHICLE_BLOCK-->', buildVehicleTag(m.marker._tooltipDriver, false))
+                        + buildStaffSuffix(m.marker._tooltipDriver) + '</div>'
                     );
                 } catch (error) {
                     /* a tooltip is cosmetic; never let it bubble */
@@ -2558,6 +2585,12 @@
                         const notesValue = row['Notes'] || '';
                         
                         let tooltipHtml = `<div style="text-align: center;"><strong>${escapeHtml(driverDisplay)}:${escapeHtml(groupDisplay)}</strong>`;
+                        // Filled in by refreshDogTooltipsWithStaff() once the Staff
+                        // tab has loaded; harmless HTML comment until then. Short
+                        // headers like "Bri:3" keep the tag on the same line;
+                        // longer ones like "Chelsey:1&2" push it below.
+                        const headerWidth = `${driverDisplay}:${groupDisplay}`.length;
+                        tooltipHtml += headerWidth <= 8 ? '<!--VEHICLE_INLINE-->' : '<!--VEHICLE_BLOCK-->';
                         if (countValue && countValue.toString().trim() !== '') {
                             tooltipHtml += `  <span style="color: #ff6b6b; font-weight: bold;">(${escapeHtml(countValue)})</span>`;
                         }
