@@ -1977,22 +1977,53 @@
         // Deliberately muted: fields are the same black diamonds as before, and
         // parking is a matching dark square. One marker per location, not per
         // driver -- the per-driver detail lives in the tooltip instead.
-        function createStaffIcon(kind) {
-            const size = 24;
-            const stroke = '#666666';
+        let staffIconSeq = 0; // unique clipPath ids so the wedges don't bleed between icons
 
-            const shape = kind === 'parking'
-                ? `<rect x="3" y="3" width="${size - 6}" height="${size - 6}" rx="4" ry="4"
-                         fill="#000000" stroke="${stroke}" stroke-width="2"/>
-                   <text x="${size / 2}" y="${size / 2 + 4}" text-anchor="middle" font-size="11"
-                         font-family="sans-serif" font-weight="700" fill="#ffffff">P</text>`
-                : `<path d="M${size / 2} 2 L${size - 2} ${size / 2} L${size / 2} ${size - 2} L2 ${size / 2} Z"
-                          fill="#000000" stroke="${stroke}" stroke-width="2"/>`;
+        // Fields are split into one colour wedge per driver going there, clipped to
+        // the diamond so the silhouette is unchanged. Parking stays solid black --
+        // the white P needs the contrast to stay legible.
+        function createStaffIcon(kind, colors) {
+            const stroke = '#333333';
+
+            if (kind === 'parking') {
+                const size = 24;
+                return L.divIcon({
+                    html: `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"
+                                style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));">
+                            <rect x="3" y="3" width="${size - 6}" height="${size - 6}" rx="4" ry="4"
+                                  fill="#000000" stroke="#666666" stroke-width="2"/>
+                            <text x="${size / 2}" y="${size / 2 + 4}" text-anchor="middle" font-size="11"
+                                  font-family="sans-serif" font-weight="700" fill="#ffffff">P</text>
+                        </svg>`,
+                    className: 'custom-staff-marker staff-parking',
+                    iconSize: [size, size],
+                    iconAnchor: [size / 2, size / 2]
+                });
+            }
+
+            // Grow the diamond with the crowd so every band keeps a usable width.
+            // A diamond only spans its full width at the vertical midpoint, so bands
+            // need roughly 7px each to stay identifiable.
+            const list = (colors && colors.length) ? colors : ['#000000'];
+            const size = Math.min(44, Math.max(24, 10 + list.length * 7));
+
+            const diamond = `M${size / 2} 2 L${size - 2} ${size / 2} L${size / 2} ${size - 2} L2 ${size / 2} Z`;
+            const clipId = `staffdia${++staffIconSeq}`;
+
+            // Vertical bands across the diamond's bounding box, clipped to shape.
+            const bandWidth = size / list.length;
+            const bands = list.map((c, i) =>
+                `<rect x="${(i * bandWidth).toFixed(2)}" y="0" width="${bandWidth.toFixed(2)}" height="${size}" fill="${c}"/>`
+            ).join('');
 
             return L.divIcon({
                 html: `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"
-                            style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));">${shape}</svg>`,
-                className: `custom-staff-marker staff-${kind}`,
+                            style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));">
+                        <defs><clipPath id="${clipId}"><path d="${diamond}"/></clipPath></defs>
+                        <g clip-path="url(#${clipId})">${bands}</g>
+                        <path d="${diamond}" fill="none" stroke="${stroke}" stroke-width="2"/>
+                    </svg>`,
+                className: 'custom-staff-marker staff-field',
                 iconSize: [size, size],
                 iconAnchor: [size / 2, size / 2]
             });
@@ -2114,7 +2145,8 @@
                 filter || '',
                 state.showStaff ? '1' : '0',
                 state.staffData.length,
-                state.locationsMap.size
+                state.locationsMap.size,
+                state.staffData.map(d => getDriverColor(d.driver)).join(',')
             ].join('|');
 
             if (!force && renderKey === state.staffRenderKey && state.staffMarkers.length > 0) {
@@ -2158,7 +2190,10 @@
                     const offset = spot.kind === 'field' ? 0.00035 : -0.00035;
 
                     const marker = L.marker([spot.lat + offset, spot.lng], {
-                        icon: createStaffIcon(spot.kind),
+                        icon: createStaffIcon(spot.kind, spot.drivers
+                            .slice()
+                            .sort((a, b) => a.driver.localeCompare(b.driver))
+                            .map(d => getDriverColor(d.driver))),
                         riseOnHover: true
                     });
 
