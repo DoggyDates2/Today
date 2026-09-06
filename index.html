@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🐕 Dog Walking Map v2.8 - With Fields Support</title>
+    <title>TODAY</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22/>">
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -720,7 +721,8 @@
             WORKSHEET_NAME: 'Schedule',
             FIELDS_WORKSHEET_NAME: 'Fields', // Static field list (superseded by the F pins)
             SHOW_FIELDS_TAB_DIAMONDS: false, // Flip to true to bring the black diamonds back
-            STAFF_WORKSHEET_NAME: 'Staff', // Driver -> Field ID / Parking ID, plus the ID -> lat/lng block from col J over
+            STAFF_WORKSHEET_NAME: 'Staff',
+            STAFF_BLOCK: 0, // 0 = first block (A:H, today), 1 = second block (P:W, tomorrow) // Driver -> Field ID / Parking ID, plus the ID -> lat/lng block from col J over
             API_KEY: 'AIzaSyAGLteYp1k98SZo0FMClRgBX0LBsgpMxqI',
             APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyAIZavcGcPhKH8WC6Ynop5NESF5sE2eyePubRoqebSbj3sbPxr4BMp-eYD81-th7cstQ/exec',
             TILE_PROVIDER: 'carto', // 'carto' (free key), 'stadia' (paid, Stamen Toner), or 'osm' (no key)
@@ -925,6 +927,13 @@
         }
 
         // Parse combined field to extract driver and group
+        // Any assignment mentioning "cancel" is hidden, wherever it appears in the
+        // cell. Exact matching missed real values like "LMCancel$:?" where a stray
+        // character or a trailing ":group" is appended.
+        function isCancelledValue(value) {
+            return String(value || '').toLowerCase().includes('cancel');
+        }
+
         function parseCombined(combinedValue) {
             if (!combinedValue) return { driver: '', group: null };
             
@@ -1221,11 +1230,7 @@
                     
                     if (!columnValue || columnValue === '') return;
                     const columnValueLower = columnValue.toLowerCase();
-                    if (columnValueLower === 'cancel' || 
-                        columnValueLower === 'lmcancel' || 
-                        columnValueLower === 'lm cancel' ||
-                        columnValueLower === 'cancelled' ||
-                        columnValueLower === 'lm cancelled') return;
+                    if (isCancelledValue(columnValue)) return;
                     
                     const { driver } = parseCombined(columnValue);
                     if (driver) {
@@ -1911,34 +1916,42 @@
                 const values = (data && data.values) || [];
                 if (values.length < 2) return;
 
-                // Location lookup lives on this same tab, off to the right,
-                // followed by the optional address -> short name block.
+                // Location lookup lives on this same tab, off to the right.
                 parseLocationBlock(values);
-                parseAliasBlock(values);
 
-                // Column A header is the date; the rest are named columns.
+                // Each staff block is 8 columns wide and always in the same order:
+                //   date | START TIME | FIELD | CAR | CAR ADDRESS | NOTES | Field ID | Parking ID
+                // Blocks are located by their "START TIME" header, then read
+                // positionally -- the second block's "Field ID"/"Parking ID" header
+                // cells are blank, so looking those up by name finds nothing.
                 const headers = (values[0] || []).map(h => String(h || '').trim());
-                const col = name => headers.indexOf(name);
-                const startCol = col('START TIME');
-                const fieldAddrCol = col('FIELD');
-                const carCol = col('CAR');
-                const parkAddrCol = col('CAR ADDRESS');
-                const notesCol = col('NOTES');
-                const fieldIdCol = col('Field ID');
-                const parkIdCol = col('Parking ID');
+                const starts = [];
+                headers.forEach((h, i) => { if (h.toUpperCase() === 'START TIME') starts.push(i); });
 
-                if (fieldIdCol === -1 || parkIdCol === -1) {
-                    console.warn('Staff tab missing "Field ID" / "Parking ID" columns');
+                const wanted = CONFIG.STAFF_BLOCK || 0;
+                if (starts.length <= wanted) {
+                    console.warn(`Staff block ${wanted} not found (${starts.length} present)`);
                     return;
                 }
+
+                const base = starts[wanted] - 1; // driver-name column
+                const startCol     = base + 1;
+                const fieldAddrCol = base + 2;
+                const carCol       = base + 3;
+                const parkAddrCol  = base + 4;
+                const notesCol     = base + 5;
+                const fieldIdCol   = base + 6;
+                const parkIdCol    = base + 7;
+
+                console.log(`Reading staff block ${wanted} at column ${base + 1} (${headers[base] || 'unlabelled'})`);
 
                 const staff = [];
                 for (let i = 1; i < values.length; i++) {
                     const row = values[i] || [];
-                    const driver = String(row[0] || '').trim();
+                    const driver = String(row[base] || '').trim();
                     if (!driver) continue;
 
-                    const startTime = startCol >= 0 ? String(row[startCol] || '').trim() : '';
+                    const startTime = String(row[startCol] || '').trim();
                     if (startTime.toUpperCase() === 'OFF') continue; // not working today
 
                     const fieldId = String(row[fieldIdCol] || '').trim();
@@ -1950,10 +1963,10 @@
                         startTime: startTime,
                         fieldId: fieldId,
                         parkingId: parkingId,
-                        fieldAddress: fieldAddrCol >= 0 ? String(row[fieldAddrCol] || '').trim() : '',
-                        parkingAddress: parkAddrCol >= 0 ? String(row[parkAddrCol] || '').trim() : '',
-                        car: carCol >= 0 ? String(row[carCol] || '').trim() : '',
-                        notes: notesCol >= 0 ? String(row[notesCol] || '').trim() : ''
+                        fieldAddress: String(row[fieldAddrCol] || '').trim(),
+                        parkingAddress: String(row[parkAddrCol] || '').trim(),
+                        car: String(row[carCol] || '').trim(),
+                        notes: String(row[notesCol] || '').trim()
                     });
                 }
 
@@ -1979,51 +1992,45 @@
         // driver -- the per-driver detail lives in the tooltip instead.
         let staffIconSeq = 0; // unique clipPath ids so the wedges don't bleed between icons
 
-        // Fields are split into one colour wedge per driver going there, clipped to
-        // the diamond so the silhouette is unchanged. Parking stays solid black --
-        // the white P needs the contrast to stay legible.
+        // Both shapes are split into one colour band per driver, clipped to the
+        // silhouette. A dog marker is always a single colour, so a multi-band square
+        // can only be parking and needs no label. A one-driver parking square is the
+        // ambiguous case -- it could be a Group 3 dog -- so that one keeps its "P".
         function createStaffIcon(kind, colors) {
-            const stroke = '#333333';
-
-            if (kind === 'parking') {
-                const size = 24;
-                return L.divIcon({
-                    html: `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"
-                                style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));">
-                            <rect x="3" y="3" width="${size - 6}" height="${size - 6}" rx="4" ry="4"
-                                  fill="#000000" stroke="#666666" stroke-width="2"/>
-                            <text x="${size / 2}" y="${size / 2 + 4}" text-anchor="middle" font-size="11"
-                                  font-family="sans-serif" font-weight="700" fill="#ffffff">P</text>
-                        </svg>`,
-                    className: 'custom-staff-marker staff-parking',
-                    iconSize: [size, size],
-                    iconAnchor: [size / 2, size / 2]
-                });
-            }
-
-            // Grow the diamond with the crowd so every band keeps a usable width.
-            // A diamond only spans its full width at the vertical midpoint, so bands
-            // need roughly 7px each to stay identifiable.
             const list = (colors && colors.length) ? colors : ['#000000'];
-            const size = Math.min(44, Math.max(24, 10 + list.length * 7));
+            const isParking = kind === 'parking';
 
-            const diamond = `M${size / 2} 2 L${size - 2} ${size / 2} L${size / 2} ${size - 2} L2 ${size / 2} Z`;
-            const clipId = `staffdia${++staffIconSeq}`;
+            // A diamond only reaches full width at its midpoint, so it needs more
+            // room per band than a square does.
+            const perBand = isParking ? 5 : 7;
+            const size = Math.min(44, Math.max(24, 10 + list.length * perBand));
 
-            // Vertical bands across the diamond's bounding box, clipped to shape.
+            const shape = isParking
+                ? `M4 ${size - 4} L4 4 L${size - 4} 4 L${size - 4} ${size - 4} Z`
+                : `M${size / 2} 2 L${size - 2} ${size / 2} L${size / 2} ${size - 2} L2 ${size / 2} Z`;
+
+            const clipId = `staffclip${++staffIconSeq}`;
             const bandWidth = size / list.length;
             const bands = list.map((c, i) =>
                 `<rect x="${(i * bandWidth).toFixed(2)}" y="0" width="${bandWidth.toFixed(2)}" height="${size}" fill="${c}"/>`
             ).join('');
 
+            const letter = (isParking && list.length === 1)
+                ? `<text x="${size / 2}" y="${size / 2 + 4}" text-anchor="middle" font-size="12"
+                         font-family="sans-serif" font-weight="700" fill="#ffffff"
+                         stroke="#000000" stroke-width="2.5" paint-order="stroke">P</text>`
+                : '';
+
             return L.divIcon({
                 html: `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"
-                            style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));">
-                        <defs><clipPath id="${clipId}"><path d="${diamond}"/></clipPath></defs>
+                            style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.35));">
+                        <defs><clipPath id="${clipId}"><path d="${shape}"/></clipPath></defs>
                         <g clip-path="url(#${clipId})">${bands}</g>
-                        <path d="${diamond}" fill="none" stroke="${stroke}" stroke-width="2"/>
+                        <path d="${shape}" fill="none" stroke="#333333" stroke-width="2"
+                              stroke-linejoin="round"/>
+                        ${letter}
                     </svg>`,
-                className: 'custom-staff-marker staff-field',
+                className: `custom-staff-marker staff-${kind}`,
                 iconSize: [size, size],
                 iconAnchor: [size / 2, size / 2]
             });
@@ -2114,29 +2121,68 @@
 
         // Tooltip for a location: what it is, then every driver using it today
         // with their colour swatch and start time.
+        // Driver colours are picked for white marker fills, and the darkest of them
+        // (#2F3542, #1B5E20, ...) disappear against a dark tooltip. Rather than
+        // lightening -- which would drift away from the colour on the diamond --
+        // keep the true colour and ring dark ones with a white halo.
+        function driverTextStyle(hex) {
+            const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+            if (!m) return 'color:#ffffff;';
+
+            const r = parseInt(m[1].slice(0, 2), 16);
+            const g = parseInt(m[1].slice(2, 4), 16);
+            const b = parseInt(m[1].slice(4, 6), 16);
+            const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+
+            const color = `color:#${m[1]};`;
+            if (lum >= 0.45) return color;
+
+            // Four offset copies plus a soft glow: an outline that survives at 12px
+            // where a single blurred shadow just muddies the glyph edges.
+            return color + 'text-shadow:'
+                + '-1px -1px 0 #fff, 1px -1px 0 #fff,'
+                + '-1px  1px 0 #fff, 1px  1px 0 #fff,'
+                + ' 0 0 3px #fff;';
+        }
+
         // Deliberately minimal: the location name on its own line, then the
         // drivers using it, two per line. Which kind of marker it is and how many
         // drivers there are are both obvious from the shape and the list itself.
         function buildStaffTooltip(spot) {
             const title = locationLabel(spot.id, '') || spot.id;
 
-            const names = spot.drivers
-                .map(d => d.driver)
-                .sort((a, b) => a.localeCompare(b));
+            // Two names per line, each in that driver's own colour.
+            const nameBlock = (drivers) => {
+                const names = drivers.map(d => d.driver).sort((a, b) => a.localeCompare(b));
+                const lines = [];
+                for (let i = 0; i < names.length; i += 2) {
+                    const pair = names.slice(i, i + 2);
+                    const trailing = (i + 2 < names.length) ? ',' : '';
+                    lines.push(pair.map((n, j) =>
+                        `<span style="${driverTextStyle(getDriverColor(n))}">${escapeHtml(n)}</span>`
+                        + (j === 0 && pair.length > 1 ? ',' : '')
+                    ).join(' ') + trailing);
+                }
+                return lines.map(l => `<div style="white-space:nowrap;">${l}</div>`).join('');
+            };
 
-            const lines = [];
-            for (let i = 0; i < names.length; i += 2) {
-                lines.push(names.slice(i, i + 2).join(', ') + (i + 2 < names.length ? ',' : ''));
+            const body = `<div style="margin-top:3px;font-size:12px;font-weight:600;line-height:1.35;">`;
+            let html = `<div style="text-align:center;">
+                            <div style="font-weight:700;font-size:14px;">${escapeHtml(title)}</div>`;
+
+            if (spot.fieldDrivers.length) {
+                html += body + nameBlock(spot.fieldDrivers) + `</div>`;
             }
 
-            const body = lines
-                .map(line => `<div style="white-space:nowrap;">${escapeHtml(line)}</div>`)
-                .join('');
+            if (spot.parkingDrivers.length) {
+                // Only label it when it needs distinguishing from the field list above.
+                if (spot.fieldDrivers.length) {
+                    html += `<div style="margin-top:5px;font-size:10px;opacity:.7;font-weight:400;">Parking Here:</div>`;
+                }
+                html += body + nameBlock(spot.parkingDrivers) + `</div>`;
+            }
 
-            return `<div style="text-align:center;">
-                        <div style="font-weight:700;font-size:14px;">${escapeHtml(title)}</div>
-                        <div style="margin-top:3px;font-size:12px;color:#ffffff;line-height:1.35;">${body}</div>
-                    </div>`;
+            return html + `</div>`;
         }
 
         function addStaffMarkers(force) {
@@ -2165,35 +2211,51 @@
                 : state.staffData;
             if (visible.length === 0) return;
 
-            // One marker per distinct location, with everyone using it attached.
+            // Grouped by coordinate rather than by ID, because a few parking spots
+            // sit exactly on a field (their Parking ID *is* a field ID). Those
+            // collapse into the single field diamond instead of stacking a
+            // redundant P square on top of it.
             const spots = new Map();
+            const keyFor = loc => `${loc.lat.toFixed(5)},${loc.lng.toFixed(5)}`;
+
             visible.forEach(entry => {
-                [['parking', entry.parkingId], ['field', entry.fieldId]].forEach(([kind, id]) => {
+                [['field', entry.fieldId], ['parking', entry.parkingId]].forEach(([kind, id]) => {
                     if (!id) return;
                     const loc = state.locationsMap.get(id);
                     if (!loc) {
                         console.warn(`No coordinates for location ID "${id}" (${entry.driver})`);
                         return;
                     }
-                    const key = `${kind}|${id}`;
+                    const key = keyFor(loc);
                     if (!spots.has(key)) {
-                        spots.set(key, { kind: kind, id: id, lat: loc.lat, lng: loc.lng, drivers: [] });
+                        spots.set(key, {
+                            id: id, lat: loc.lat, lng: loc.lng,
+                            fieldDrivers: [], parkingDrivers: []
+                        });
                     }
-                    spots.get(key).drivers.push(entry);
+                    const spot = spots.get(key);
+                    if (kind === 'field') {
+                        spot.fieldDrivers.push(entry);
+                        spot.id = id; // prefer the field's own id for the label
+                    } else {
+                        spot.parkingDrivers.push(entry);
+                    }
                 });
             });
 
             spots.forEach(spot => {
                 try {
-                    // Tiny nudge so a driver who parks at their own field still
-                    // gets two separate, clickable markers.
-                    const offset = spot.kind === 'field' ? 0.00035 : -0.00035;
+                    // A spot with anyone walking there is a field; parking-only
+                    // spots keep the black P square.
+                    const isField = spot.fieldDrivers.length > 0;
+                    const banded = isField ? spot.fieldDrivers : spot.parkingDrivers;
+                    const colors = banded
+                        .slice()
+                        .sort((a, b) => a.driver.localeCompare(b.driver))
+                        .map(d => getDriverColor(d.driver));
 
-                    const marker = L.marker([spot.lat + offset, spot.lng], {
-                        icon: createStaffIcon(spot.kind, spot.drivers
-                            .slice()
-                            .sort((a, b) => a.driver.localeCompare(b.driver))
-                            .map(d => getDriverColor(d.driver))),
+                    const marker = L.marker([spot.lat, spot.lng], {
+                        icon: createStaffIcon(isField ? 'field' : 'parking', colors),
                         riseOnHover: true
                     });
 
@@ -2361,11 +2423,7 @@
                                 blankCount++;
                             } else {
                                 const columnValueLower = columnValue.toLowerCase();
-                                if (columnValueLower === 'cancel' || 
-                                    columnValueLower === 'lmcancel' || 
-                                    columnValueLower === 'lm cancel' ||
-                                    columnValueLower === 'cancelled' ||
-                                    columnValueLower === 'lm cancelled') {
+                                if (isCancelledValue(columnValue)) {
                                     cancelledCount++;
                                 }
                             }
@@ -2466,11 +2524,7 @@
                     }
                     
                     const columnValueLower = columnValue.toLowerCase().trim();
-                    if (columnValueLower === 'cancel' || 
-                        columnValueLower === 'lmcancel' || 
-                        columnValueLower === 'lm cancel' ||
-                        columnValueLower === 'cancelled' ||
-                        columnValueLower === 'lm cancelled') {
+                    if (isCancelledValue(columnValue)) {
                         return false;
                     }
                     
@@ -2527,11 +2581,7 @@
                         
                         if (!columnValue || columnValue === '') return;
                         const columnValueLower = columnValue.toLowerCase();
-                        if (columnValueLower === 'cancel' || 
-                            columnValueLower === 'lmcancel' || 
-                            columnValueLower === 'lm cancel' ||
-                            columnValueLower === 'cancelled' ||
-                            columnValueLower === 'lm cancelled') return;
+                        if (isCancelledValue(columnValue)) return;
                         
                         const { driver } = parseCombined(columnValue);
                         if (driver) {
@@ -3304,11 +3354,7 @@
                             const columnValue = row[state.activeColumn].trim();
                             if (!columnValue || columnValue === '') return;
                             const columnValueLower = columnValue.toLowerCase();
-                            if (columnValueLower === 'cancel' || 
-                                columnValueLower === 'lmcancel' || 
-                                columnValueLower === 'lm cancel' ||
-                                columnValueLower === 'cancelled' ||
-                                columnValueLower === 'lm cancelled') return;
+                            if (isCancelledValue(columnValue)) return;
                             
                             const { driver, group } = parseCombined(columnValue);
                             if (driver !== key) return;
