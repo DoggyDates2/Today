@@ -1536,9 +1536,8 @@
                 
                 tileLayer.addTo(state.map);
                 state.map.on('zoomend', applyFieldArrows);
-                // Labels are laid out in screen space against what's currently
-                // visible, so they need recomputing on any pan or zoom.
-                state.map.on('zoomend moveend', applyDriverLabels);
+                // Layout is pan-invariant, so this only needs redoing on zoom.
+                state.map.on('zoomend', applyDriverLabels);
 
                 
                 setTimeout(() => {
@@ -2239,19 +2238,19 @@
                 if (!state.map) return;
                 if (state.map.getZoom() < CONFIG.DRIVER_LABEL_MIN_ZOOM) return;
 
-                const bounds = state.map.getBounds();
                 const toPoint = ll => state.map.latLngToLayerPoint(ll);
 
-                // Obstacles: every dog and every field/parking marker on screen.
+                // Every dog and every field/parking marker, NOT just the visible
+                // ones. Layer points are pan-invariant, so using the full set makes
+                // the layout depend only on zoom -- filtering by viewport made
+                // clumps regroup on every pan and the labels flickered.
                 const obstacles = [];
                 const clusters = new Map();
 
                 state.markers.forEach(m => {
                     const marker = m && m.marker;
                     if (!marker || typeof marker.getLatLng !== 'function') return;
-                    const ll = marker.getLatLng();
-                    if (!bounds.contains(ll)) return;
-                    const pt = toPoint(ll);
+                    const pt = toPoint(marker.getLatLng());
                     obstacles.push({ x: pt.x - 9, y: pt.y - 9, w: 18, h: 18 });
 
                     const driver = String(marker._tooltipDriver || '').trim();
@@ -2261,9 +2260,7 @@
                 });
 
                 state.staffMarkers.forEach(marker => {
-                    const ll = marker.getLatLng();
-                    if (!bounds.contains(ll)) return;
-                    const pt = toPoint(ll);
+                    const pt = toPoint(marker.getLatLng());
                     obstacles.push({ x: pt.x - 22, y: pt.y - 22, w: 44, h: 44 });
                 });
 
