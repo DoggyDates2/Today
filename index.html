@@ -1535,7 +1535,7 @@
             });
         }
         
-        // XX3 dogs draw as a square with "XX" in it; everything else keeps its group shape.
+        // XX3 dogs draw as a square with "X" in it; everything else keeps its group shape.
         function markerGroupFor(rawValue, group) {
             const raw = String(rawValue || '');
             if (/xx/i.test(raw)) {
@@ -1594,13 +1594,13 @@
                         iconAnchor: [svgSize/2, svgSize/2]
                     });
                 } else if (group === 'XX2') {
-                    // Triangle with "XX" for XX2 dogs (groups 1 and 2)
+                    // Triangle with "X" for XX2 dogs (groups 1 and 2)
                     const svgSize = size + 3;
                     icon = L.divIcon({
                         html: `<div style="position:relative; width:${svgSize}px; height:${svgSize}px;">
                             <svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3)); ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">
                                 <path d="M${svgSize/2} 2 L${svgSize-2} ${svgSize-2} L2 ${svgSize-2} Z" fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
-                                <text x="${svgSize/2}" y="${svgSize*0.79}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-weight="700" font-size="${Math.round(svgSize*0.4)}" fill="#fff" stroke="#000" stroke-width="0.7" paint-order="stroke" letter-spacing="-0.5">XX</text>
+                                <text x="${svgSize/2}" y="${svgSize*0.79}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-weight="700" font-size="${Math.round(svgSize*0.48)}" fill="#fff" stroke="#000" stroke-width="0.7" paint-order="stroke">X</text>
                             </svg>
                             ${groomingLine}
                         </div>`,
@@ -1609,10 +1609,10 @@
                         iconAnchor: [svgSize/2, svgSize/2]
                     });
                 } else if (group === 'XX3') {
-                    // Square with "XX" for XX3 dogs (all three groups)
+                    // Square with "X" for XX3 dogs (all three groups)
                     icon = L.divIcon({
                         html: `<div style="position:relative; width:${size}px; height:${size}px;">
-                            <div style="width: ${size}px; height: ${size}px; background-color: ${color}; border: ${strokeWidth}px solid ${strokeColor}; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; font:700 ${Math.round(size*0.6)}px/1 Arial, sans-serif; color:#fff; text-shadow:0 0 2px #000, 0 0 2px #000, 0 0 3px #000; letter-spacing:-0.5px; ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">XX</div>
+                            <div style="width: ${size}px; height: ${size}px; background-color: ${color}; border: ${strokeWidth}px solid ${strokeColor}; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; font:700 ${Math.round(size*0.75)}px/1 Arial, sans-serif; color:#fff; text-shadow:0 0 2px #000, 0 0 2px #000, 0 0 3px #000; ${isInSelection ? 'animation: pulse 2s infinite;' : ''}">X</div>
                             ${groomingLine}
                         </div>`,
                         className: `custom-square-marker ${isInSelection ? 'marker-selected' : ''}`,
