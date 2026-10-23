@@ -3754,7 +3754,7 @@
                                            autocomplete="off" 
                                            style="margin: 0;" />
                                 </div>
-                                <div style="flex: 1;">
+                                <div style="flex: 1; display: none;">
                                     <input type="text" id="bulkGroupInput" class="bulk-edit-input" 
                                            placeholder="Group (e.g., 1)"
                                            title="Group for all selected markers"
@@ -3769,7 +3769,7 @@
                             </div>
                         </div>
                         <div style="font-size: 10px; color: #999; margin-top: 5px;">
-                            Enter driver name and group separately. Both will be combined as "Driver:Group"
+                            Changes the driver only. Each dog keeps its current group.
                         </div>
                     </div>
                 `;
@@ -4326,7 +4326,8 @@
                     return;
                 }
                 
-                if (!confirm(`Update ${validSelectedRows.length} dogs with: "${newCombinedValue}"?`)) {
+                const confirmLabel = groupValue ? newCombinedValue : `${driverValue} (keeping each dog's group)`;
+                if (!confirm(`Update ${validSelectedRows.length} dogs with: "${confirmLabel}"?`)) {
                     return;
                 }
                 
@@ -4340,8 +4341,18 @@
                     oldValue: row[state.activeColumn] || ''
                 }));
                 
-                validSelectedRows.forEach(row => {
-                    row[state.activeColumn] = newCombinedValue;
+                // Per-dog value: when Group is blank, keep each dog's existing group and only swap the driver.
+                const valueForRow = (row) => {
+                    if (groupValue) return newCombinedValue;
+                    const existing = String(row[state.activeColumn] || '');
+                    const ci = existing.lastIndexOf(':');
+                    const existingGroup = ci === -1 ? '' : existing.substring(ci + 1).trim();
+                    return existingGroup ? `${driverValue}:${existingGroup}` : driverValue;
+                };
+                const newValues = validSelectedRows.map(valueForRow);
+
+                validSelectedRows.forEach((row, i) => {
+                    row[state.activeColumn] = newValues[i];
                 });
                 
                 assignDriverColors();
@@ -4350,9 +4361,9 @@
                 
                 showNotification(`Saving ${validSelectedRows.length} updates to Google Sheets...`, 'info');
                 
-                const updates = sheetRowIndices.map(sheetRowIndex => {
+                const updates = sheetRowIndices.map((sheetRowIndex, i) => {
                     const updateData = {};
-                    updateData[state.activeColumn] = newCombinedValue;
+                    updateData[state.activeColumn] = newValues[i];
                     return {
                         rowIndex: sheetRowIndex,
                         updatedData: updateData
