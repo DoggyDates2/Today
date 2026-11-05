@@ -640,6 +640,7 @@
         <div class="control-group">
             <label for="searchInput">Search:</label>
             <input type="text" id="searchInput" placeholder="Search dogs, drivers, or addresses..." autocomplete="off" />
+            <span id="searchMsg" style="display:none; font-size:12px; color:#c0392b; margin-left:6px;"></span>
         </div>
 
         <div class="control-group group-filters">
@@ -3593,10 +3594,83 @@
                     const group = L.featureGroup(state.markers.map(m => m.marker));
                     state.map.fitBounds(group.getBounds().pad(0.1));
                 }
+
+                // Address lookup: only when the dog search found nothing.
+                if (!searchTerm) {
+                    clearAddressLookup();
+                } else if (state.markers.length > 0) {
+                    clearAddressLookup();
+                } else {
+                    scheduleAddressLookup(searchTerm);
+                }
                 
             } catch (error) {
                 console.error('Error in updateMap:', error);
                 showNotification('Error updating map display', 'error');
+            }
+        }
+
+        // ==================== ADDRESS LOOKUP ====================
+        // Geocodes the search text via Nominatim (OpenStreetMap) when no dog
+        // matched. The pin lives in its own layer (not state.markers), so
+        // updateMap() never strips it; it is never saved or written anywhere.
+        const addressLookup = { marker: null, timer: null, seq: 0, lastQuery: '' };
+
+        function setSearchMsg(text) {
+            const el = document.getElementById('searchMsg');
+            if (!el) return;
+            el.textContent = text || '';
+            el.style.display = text ? 'inline' : 'none';
+        }
+
+        function clearAddressLookup() {
+            if (addressLookup.timer) { clearTimeout(addressLookup.timer); addressLookup.timer = null; }
+            addressLookup.seq++;
+            addressLookup.lastQuery = '';
+            if (addressLookup.marker) {
+                try { state.map.removeLayer(addressLookup.marker); } catch (e) {}
+                addressLookup.marker = null;
+            }
+            setSearchMsg('');
+        }
+
+        function scheduleAddressLookup(query) {
+            if (query === addressLookup.lastQuery) return; // already looked up / pinned
+            if (addressLookup.timer) clearTimeout(addressLookup.timer);
+            addressLookup.timer = setTimeout(() => runAddressLookup(query), 700);
+        }
+
+        async function runAddressLookup(query) {
+            addressLookup.timer = null;
+            const mySeq = ++addressLookup.seq;
+            addressLookup.lastQuery = query;
+            setSearchMsg('Looking up address...');
+            try {
+                // Bias to the Natick, MA area; US only.
+                const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us'
+                    + '&viewbox=-71.75,42.55,-70.95,42.05&q=' + encodeURIComponent(query + ', MA');
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                const data = res.ok ? await res.json() : [];
+                if (mySeq !== addressLookup.seq) return; // stale response
+                if (!data || !data.length) { setSearchMsg('No dog or address found'); return; }
+                const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
+                if (!validateCoordinates(lat, lng)) { setSearchMsg('No dog or address found'); return; }
+                if (addressLookup.marker) { try { state.map.removeLayer(addressLookup.marker); } catch (e) {} }
+                const icon = L.divIcon({
+                    className: '',
+                    html: '<div style="background:#8e44ad;color:#fff;border:2px solid #fff;border-radius:50%;width:30px;height:30px;line-height:28px;text-align:center;font-size:17px;box-shadow:0 2px 5px rgba(0,0,0,0.5);">📍</div>',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+                addressLookup.marker = L.marker([lat, lng], { icon, zIndexOffset: 2000, interactive: true })
+                    .bindTooltip(escapeHtml(data[0].display_name || query), { direction: 'top', offset: [0, -14] })
+                    .addTo(state.map);
+                state.map.setView([lat, lng], Math.max(state.map.getZoom(), 16));
+                setSearchMsg('');
+            } catch (e) {
+                if (mySeq !== addressLookup.seq) return;
+                console.warn('Address lookup failed:', e);
+                setSearchMsg('No dog or address found');
             }
         }
 
@@ -4609,6 +4683,14 @@
                 if (searchInput) {
                     searchInput.addEventListener('input', debouncedUpdateMap);
                     searchInput.addEventListener('search', debouncedUpdateMap);
+                    searchInput.addEventListener('keydown', (e) => {
+                        if (e.key !== 'Enter') return;
+                        const q = searchInput.value.toLowerCase().trim();
+                        if (!q) return;
+                        if (addressLookup.timer) clearTimeout(addressLookup.timer);
+                        addressLookup.lastQuery = '';
+                        runAddressLookup(q);
+                    });
                 }
                 
                 // Group filter buttons
